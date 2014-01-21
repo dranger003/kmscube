@@ -73,7 +73,7 @@ struct drm_fb {
 static int init_drm(void)
 {
 	static const char *modules[] = {
-			"i915", "radeon", "nouveau", "vmwgfx", "omapdrm", "exynos", "msm"
+			"vmwgfx", "i915", "radeon", "nouveau", "omapdrm", "exynos", "msm"
 	};
 	drmModeRes *resources;
 	drmModeConnector *connector = NULL;
@@ -125,7 +125,7 @@ static int init_drm(void)
 	for (i = 0, area = 0; i < connector->count_modes; i++) {
 		drmModeModeInfo *current_mode = &connector->modes[i];
 		int current_area = current_mode->hdisplay * current_mode->vdisplay;
-		if (current_area > area) {
+		if (current_area == 983040) { // 1280x768
 			drm.mode = current_mode;
 			area = current_area;
 		}
@@ -146,11 +146,34 @@ static int init_drm(void)
 	}
 
 	if (!encoder) {
-		printf("no encoder!\n");
-		return -1;
-	}
+		drm.crtc_id = 0;
 
-	drm.crtc_id = encoder->crtc_id;
+		for (i = 0; i < connector->count_encoders; i++) {
+			encoder = drmModeGetEncoder(drm.fd, connector->encoders[i]);
+			if (!encoder)
+				continue;
+
+			int j;
+			for (j = 0; j < resources->count_crtcs; j++) {
+				if (!(encoder->possible_crtcs & (1 << j)))
+					continue;
+
+				drm.crtc_id = resources->crtcs[j];
+				break;
+			}
+
+			if (drm.crtc_id != 0)
+				break;
+		}
+
+		if (!encoder) {
+			printf("no encoder!\n");
+			return -1;
+		}
+	}
+	else
+		drm.crtc_id = encoder->crtc_id;
+
 	drm.connector_id = connector->connector_id;
 
 	return 0;
